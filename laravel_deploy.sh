@@ -62,10 +62,10 @@ echo "----------------------------------------------------------"
 echo "Step 6: Configuring Laravel .env File..."
 echo "----------------------------------------------------------"
 cd /var/www/$PROJECT_NAME
-sed -i "s/DB_DATABASE=laravel/DB_DATABASE=$DB_NAME/" .env
-sed -i "s/DB_USERNAME=root/DB_USERNAME=$DB_USER/" .env
-sed -i "s/DB_PASSWORD=/DB_PASSWORD=$DB_PASSWORD/" .env
-sed -i "s|APP_URL=http://localhost|APP_URL=https://$DOMAIN_NAME|" .env
+sed -i "s/DB_CONNECTION=sqlite/DB_CONNECTION=mysql/" .env
+sed -i "s/# DB_DATABASE=laravel/DB_DATABASE=$DB_NAME/" .env
+sed -i "s/# DB_USERNAME=root/DB_USERNAME=$DB_USER/" .env
+sed -i "s/# DB_PASSWORD=/DB_PASSWORD=$DB_PASSWORD/" .env
 
 echo "----------------------------------------------------------"
 echo "Step 7: Setting Permissions..."
