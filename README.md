@@ -24,7 +24,7 @@ This script automates the installation of a production-ready **LEMP Stack** (Lin
 
 2.  **Download the script:**
     ```bash
-    nano laravel_deploy.sh
+    wget https://raw.githubusercontent.com/adnnco/LaraShip/main/laravel_deploy.sh
     ```
     *(Paste the content of the script and save with Ctrl+O, Enter, Ctrl+X)*
 
