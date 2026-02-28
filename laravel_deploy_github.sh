@@ -98,25 +98,64 @@ mysql -e "GRANT ALL PRIVILEGES ON $DB_NAME.* TO '$DB_USER'@'localhost';"
 mysql -e "FLUSH PRIVILEGES;"
 
 echo "----------------------------------------------------------"
-echo "Step 5: Cloning Repository from GitHub..."
+echo "Step 5: Setting Up SSH Deploy Key for GitHub..."
+echo "----------------------------------------------------------"
+SSH_DIR="/root/.ssh"
+SSH_KEY="$SSH_DIR/github_deploy"
+
+mkdir -p "$SSH_DIR"
+chmod 700 "$SSH_DIR"
+
+if [ ! -f "$SSH_KEY" ]; then
+  ssh-keygen -t ed25519 -C "deploy@$DOMAIN_NAME" -f "$SSH_KEY" -N ""
+fi
+
+# Trust github.com host
+ssh-keyscan -t ed25519 github.com >> "$SSH_DIR/known_hosts" 2>/dev/null
+
+# Configure SSH to use this key for github.com
+if ! grep -q "Host github.com" "$SSH_DIR/config" 2>/dev/null; then
+  cat <<EOF >> "$SSH_DIR/config"
+Host github.com
+    HostName github.com
+    User git
+    IdentityFile $SSH_KEY
+    StrictHostKeyChecking no
+EOF
+fi
+
+echo ""
+echo "=========================================================="
+echo " ACTION REQUIRED: Add this Deploy Key to your GitHub repo "
+echo "=========================================================="
+echo ""
+cat "$SSH_KEY.pub"
+echo ""
+echo "Go to: GitHub repo → Settings → Deploy keys → Add deploy key"
+echo "Paste the key above and click 'Add key' (read-only is enough)."
+echo ""
+read -p "Press ENTER once you have added the deploy key to GitHub..."
+
+echo "----------------------------------------------------------"
+echo "Step 6: Cloning Repository from GitHub..."
 echo "----------------------------------------------------------"
 DEPLOY_DIR="/var/www/$PROJECT_NAME"
 
 if [ -d "$DEPLOY_DIR" ]; then
   echo "Directory $DEPLOY_DIR already exists. Pulling latest changes..."
-  git -C "$DEPLOY_DIR" pull origin "$BRANCH"
+  GIT_SSH_COMMAND="ssh -i $SSH_KEY" git -C "$DEPLOY_DIR" pull origin "$BRANCH"
 else
-  git clone --branch "$BRANCH" "$REPO_URL" "$DEPLOY_DIR"
+  GIT_SSH_COMMAND="ssh -i $SSH_KEY" git clone --branch "$BRANCH" "$REPO_URL" "$DEPLOY_DIR"
 fi
 
 echo "----------------------------------------------------------"
-echo "Step 6: Installing PHP Dependencies..."
+echo "Step 7: Installing PHP Dependencies..."
 echo "----------------------------------------------------------"
 cd "$DEPLOY_DIR"
 COMPOSER_ALLOW_SUPERUSER=1 composer install --no-dev --optimize-autoloader
 
 echo "----------------------------------------------------------"
-echo "Step 7: Configuring Laravel .env File..."
+echo "Step 8: Configuring Laravel .env File..."
 echo "----------------------------------------------------------"
 if [ ! -f "$DEPLOY_DIR/.env" ]; then
   cp "$DEPLOY_DIR/.env.example" "$DEPLOY_DIR/.env"
@@ -136,23 +175,29 @@ sed -i "s|^DB_USERNAME=.*|DB_USERNAME=$DB_USER|"     "$DEPLOY_DIR/.env"
 sed -i "s|^DB_PASSWORD=.*|DB_PASSWORD=$DB_PASSWORD|" "$DEPLOY_DIR/.env"
 
 echo "----------------------------------------------------------"
-echo "Step 8: Generating App Key and Running Migrations..."
-echo "----------------------------------------------------------"
-php artisan key:generate
-php artisan migrate --force
-php artisan config:cache
-php artisan route:cache
-php artisan view:cache
-
-echo "----------------------------------------------------------"
 echo "Step 9: Setting Permissions..."
 echo "----------------------------------------------------------"
+mkdir -p "$DEPLOY_DIR/storage/framework/cache/data"
+mkdir -p "$DEPLOY_DIR/storage/framework/sessions"
+mkdir -p "$DEPLOY_DIR/storage/framework/testing"
+mkdir -p "$DEPLOY_DIR/storage/framework/views"
+mkdir -p "$DEPLOY_DIR/storage/logs"
+mkdir -p "$DEPLOY_DIR/bootstrap/cache"
 chown -R www-data:www-data "$DEPLOY_DIR"
 chmod -R 775 "$DEPLOY_DIR/storage"
 chmod -R 775 "$DEPLOY_DIR/bootstrap/cache"
 
 echo "----------------------------------------------------------"
-echo "Step 10: Configuring Nginx..."
+echo "Step 10: Generating App Key and Running Migrations..."
+echo "----------------------------------------------------------"
+sudo -u www-data php artisan key:generate
+sudo -u www-data php artisan migrate --force
+sudo -u www-data php artisan config:cache
+sudo -u www-data php artisan route:cache
+sudo -u www-data php artisan view:cache
+
+echo "----------------------------------------------------------"
+echo "Step 11: Configuring Nginx..."
 echo "----------------------------------------------------------"
 cat <<EOF > /etc/nginx/sites-available/$PROJECT_NAME
 server {
@@ -193,7 +238,7 @@ rm -f /etc/nginx/sites-enabled/default
 nginx -t && systemctl restart nginx
 
 echo "----------------------------------------------------------"
-echo "Step 11: Installing SSL Certificate (Certbot)..."
+echo "Step 12: Installing SSL Certificate (Certbot)..."
 echo "----------------------------------------------------------"
 certbot --nginx -d "$DOMAIN_NAME" --non-interactive --agree-tos -m "$SSL_EMAIL"
 

@@ -59,11 +59,13 @@ A collection of shell scripts that automate the deployment of production-ready *
 Deploys an **existing Laravel repository** from GitHub. Supports both interactive and fully non-interactive (CI/CD) modes.
 
 ### Features
-- **GitHub Clone:** Clones your repo directly from GitHub with a specified branch.
+- **SSH Deploy Key:** Automatically generates an ed25519 SSH key and guides you through adding it to GitHub — works with private and public repositories.
+- **GitHub Clone:** Clones your repo directly from GitHub via SSH with a specified branch.
 - **Re-deploy Support:** If the project directory already exists, runs `git pull` instead of re-cloning.
 - **Branch Selection:** Deploy any branch or tag (defaults to `main`).
 - **Composer:** Installs dependencies with `--no-dev --optimize-autoloader` for production.
-- **Artisan Setup:** Automatically runs `key:generate`, `migrate`, and caches config/routes/views.
+- **Artisan Setup:** Automatically runs `key:generate`, `migrate`, and caches config/routes/views (as `www-data` to avoid permission issues).
+- **Storage Directories:** Creates all required Laravel `storage/framework/*` subdirectories before setting permissions, preventing cache path errors.
 - **Automatic .env Config:** Copies `.env.example` and injects database credentials.
 - **Database Management:** Creates a MySQL database and dedicated user with a secure random password.
 - **Security:** Sets correct folder permissions and installs **SSL (Let's Encrypt)** via Certbot.
@@ -91,7 +93,7 @@ Deploys an **existing Laravel repository** from GitHub. Supports both interactiv
     **Option A — Pass all parameters (non-interactive / CI-CD friendly):**
     ```bash
     sudo ./laravel_deploy_github.sh \
-      --repo    https://github.com/your-user/your-repo.git \
+      --repo    git@github.com:your-user/your-repo.git \
       --branch  main \
       --project my-app \
       --domain  example.com \
@@ -101,14 +103,22 @@ Deploys an **existing Laravel repository** from GitHub. Supports both interactiv
 
     **Option B — Interactive (prompts for anything not passed):**
     ```bash
-    sudo ./laravel_deploy_github.sh --repo https://github.com/your-user/your-repo.git
+    sudo ./laravel_deploy_github.sh --repo git@github.com:your-user/your-repo.git
     ```
+
+5. **Add the deploy key to GitHub when prompted:**
+
+    The script will pause and print an SSH public key. Copy it, then go to:
+    > **GitHub repo → Settings → Deploy keys → Add deploy key**
+
+    Paste the key, give it a title (e.g., `VPS Deploy`), and click **Add key**.
+    Press `ENTER` in the terminal to continue.
 
 ### Parameters
 
 | Parameter | Required | Default | Description |
 |---|---|---|---|
-| `--repo` | Yes | — | GitHub repository URL (HTTPS or SSH) |
+| `--repo` | Yes | — | GitHub repository SSH URL (e.g., `git@github.com:user/repo.git`) |
 | `--branch` | No | `main` | Branch or tag to deploy |
 | `--project` | No | prompted | Project/folder name under `/var/www/` |
 | `--domain` | No | prompted | Domain name for Nginx and SSL |
@@ -139,7 +149,8 @@ Once either script finishes, it will print your **Database Credentials**. Save t
 
 - **SSL:** The Certbot step will fail if your domain's DNS has not propagated yet.
 - **PHP Extensions:** The scripts install the most common Laravel extensions. If you need extras (e.g., `php-gd`, `php-imagick`), add them manually via `apt install`.
-- **Private Repos:** For private GitHub repositories, set up an SSH key on the server and use the SSH clone URL (`git@github.com:user/repo.git`).
+- **SSH Key:** The generated deploy key is saved at `/root/.ssh/github_deploy`. If you re-run the script the same key is reused — no need to update GitHub.
+- **Private Repos:** SSH deploy keys work for both private and public repositories. Read-only access is sufficient for deployment.
 
 ---
 

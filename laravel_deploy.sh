@@ -14,7 +14,7 @@ echo "=========================================================="
 read -p "Enter Project Name (e.g., my-app): " PROJECT_NAME
 read -p "Enter Domain Name (e.g., example.com): " DOMAIN_NAME
 read -p "Enter Email for SSL (e.g., admin@example.com): " SSL_EMAIL
-read -p "Enter PHP Version (e.g., 8.2, 8.3): " PHP_VERSION
+read -p "Enter PHP Version (e.g., 8.2, 8.3+): " PHP_VERSION
 
 # Generate a random password for the new MySQL user
 DB_PASSWORD=$(openssl rand -base64 12)
