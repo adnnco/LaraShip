@@ -27,7 +27,6 @@ PROJECT_NAME=""
 DOMAIN_NAME=""
 SSL_EMAIL=""
 PHP_VERSION=""
-
 while [[ "$#" -gt 0 ]]; do
   case $1 in
     --repo)     REPO_URL="$2";     shift ;;
@@ -42,7 +41,7 @@ while [[ "$#" -gt 0 ]]; do
 done
 
 # Fall back to interactive prompts for any missing values
-[ -z "$REPO_URL" ]      && read -p "Enter GitHub Repo URL (e.g., https://github.com/user/repo.git): " REPO_URL
+[ -z "$REPO_URL" ]      && read -p "Enter GitHub Repo URL (e.g., git@github.com:user/repo.git): " REPO_URL
 [ -z "$PROJECT_NAME" ]  && read -p "Enter Project Name (e.g., my-app): " PROJECT_NAME
 [ -z "$DOMAIN_NAME" ]   && read -p "Enter Domain Name (e.g., example.com): " DOMAIN_NAME
 [ -z "$SSL_EMAIL" ]     && read -p "Enter Email for SSL (e.g., admin@example.com): " SSL_EMAIL
@@ -60,6 +59,7 @@ echo "  Repo     : $REPO_URL  (branch: $BRANCH)"
 echo "  Project  : $PROJECT_NAME"
 echo "  Domain   : $DOMAIN_NAME"
 echo "  PHP      : $PHP_VERSION"
+echo "  Node.js  : latest LTS (via NVM)"
 echo "  DB Name  : $DB_NAME"
 echo "  DB User  : $DB_USER"
 echo "----------------------------------------------------------"
@@ -90,7 +90,18 @@ php /tmp/composer-setup.php --install-dir=/usr/local/bin --filename=composer
 rm /tmp/composer-setup.php
 
 echo "----------------------------------------------------------"
-echo "Step 4: Creating Database and User..."
+echo "Step 4: Installing NVM and Node.js (latest LTS)..."
+echo "----------------------------------------------------------"
+export NVM_DIR="/root/.nvm"
+curl -fsSL https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.2/install.sh | bash
+# Load nvm for the rest of this script
+[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+nvm install --lts
+nvm use --lts
+nvm alias default node
+
+echo "----------------------------------------------------------"
+echo "Step 5: Creating Database and User..."
 echo "----------------------------------------------------------"
 mysql -e "CREATE DATABASE $DB_NAME CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
 mysql -e "CREATE USER '$DB_USER'@'localhost' IDENTIFIED BY '$DB_PASSWORD';"
@@ -98,7 +109,7 @@ mysql -e "GRANT ALL PRIVILEGES ON $DB_NAME.* TO '$DB_USER'@'localhost';"
 mysql -e "FLUSH PRIVILEGES;"
 
 echo "----------------------------------------------------------"
-echo "Step 5: Setting Up SSH Deploy Key for GitHub..."
+echo "Step 6: Setting Up SSH Deploy Key for GitHub..."
 echo "----------------------------------------------------------"
 SSH_DIR="/root/.ssh"
 SSH_KEY="$SSH_DIR/github_deploy"
@@ -137,7 +148,7 @@ echo ""
 read -p "Press ENTER once you have added the deploy key to GitHub..."
 
 echo "----------------------------------------------------------"
-echo "Step 6: Cloning Repository from GitHub..."
+echo "Step 7: Cloning Repository from GitHub..."
 echo "----------------------------------------------------------"
 DEPLOY_DIR="/var/www/$PROJECT_NAME"
 
@@ -149,13 +160,23 @@ else
 fi
 
 echo "----------------------------------------------------------"
-echo "Step 7: Installing PHP Dependencies..."
+echo "Step 8: Installing PHP Dependencies..."
 echo "----------------------------------------------------------"
 cd "$DEPLOY_DIR"
 COMPOSER_ALLOW_SUPERUSER=1 composer install --no-dev --optimize-autoloader
 
 echo "----------------------------------------------------------"
-echo "Step 8: Configuring Laravel .env File..."
+echo "Step 9: Installing Node Dependencies & Building Assets..."
+echo "----------------------------------------------------------"
+if [ -f "$DEPLOY_DIR/package.json" ]; then
+  npm install --prefix "$DEPLOY_DIR"
+  npm run build --prefix "$DEPLOY_DIR"
+else
+  echo "No package.json found, skipping npm build."
+fi
+
+echo "----------------------------------------------------------"
+echo "Step 10: Configuring Laravel .env File..."
 echo "----------------------------------------------------------"
 if [ ! -f "$DEPLOY_DIR/.env" ]; then
   cp "$DEPLOY_DIR/.env.example" "$DEPLOY_DIR/.env"
@@ -175,7 +196,7 @@ sed -i "s|^DB_USERNAME=.*|DB_USERNAME=$DB_USER|"     "$DEPLOY_DIR/.env"
 sed -i "s|^DB_PASSWORD=.*|DB_PASSWORD=$DB_PASSWORD|" "$DEPLOY_DIR/.env"
 
 echo "----------------------------------------------------------"
-echo "Step 9: Setting Permissions..."
+echo "Step 11: Setting Permissions..."
 echo "----------------------------------------------------------"
 mkdir -p "$DEPLOY_DIR/storage/framework/cache/data"
 mkdir -p "$DEPLOY_DIR/storage/framework/sessions"
@@ -188,7 +209,7 @@ chmod -R 775 "$DEPLOY_DIR/storage"
 chmod -R 775 "$DEPLOY_DIR/bootstrap/cache"
 
 echo "----------------------------------------------------------"
-echo "Step 10: Generating App Key and Running Migrations..."
+echo "Step 12: Generating App Key and Running Migrations..."
 echo "----------------------------------------------------------"
 sudo -u www-data php artisan key:generate
 sudo -u www-data php artisan migrate --force
@@ -197,7 +218,7 @@ sudo -u www-data php artisan route:cache
 sudo -u www-data php artisan view:cache
 
 echo "----------------------------------------------------------"
-echo "Step 11: Configuring Nginx..."
+echo "Step 13: Configuring Nginx..."
 echo "----------------------------------------------------------"
 cat <<EOF > /etc/nginx/sites-available/$PROJECT_NAME
 server {
@@ -238,7 +259,7 @@ rm -f /etc/nginx/sites-enabled/default
 nginx -t && systemctl restart nginx
 
 echo "----------------------------------------------------------"
-echo "Step 12: Installing SSL Certificate (Certbot)..."
+echo "Step 14: Installing SSL Certificate (Certbot)..."
 echo "----------------------------------------------------------"
 certbot --nginx -d "$DOMAIN_NAME" --non-interactive --agree-tos -m "$SSL_EMAIL"
 

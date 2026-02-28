@@ -64,6 +64,8 @@ Deploys an **existing Laravel repository** from GitHub. Supports both interactiv
 - **Re-deploy Support:** If the project directory already exists, runs `git pull` instead of re-cloning.
 - **Branch Selection:** Deploy any branch or tag (defaults to `main`).
 - **Composer:** Installs dependencies with `--no-dev --optimize-autoloader` for production.
+- **NVM + Node.js:** Installs NVM and the latest LTS version of Node.js automatically — no configuration needed.
+- **Frontend Build:** Runs `npm install` and `npm run build` automatically if a `package.json` is present (Vite / Mix).
 - **Artisan Setup:** Automatically runs `key:generate`, `migrate`, and caches config/routes/views (as `www-data` to avoid permission issues).
 - **Storage Directories:** Creates all required Laravel `storage/framework/*` subdirectories before setting permissions, preventing cache path errors.
 - **Automatic .env Config:** Copies `.env.example` and injects database credentials.
